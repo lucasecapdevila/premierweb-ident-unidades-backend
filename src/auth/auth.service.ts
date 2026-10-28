@@ -1,18 +1,13 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
-import { RowDataPacket } from 'mysql2/promise';
 import { DatabaseService } from '../database/database.service.js';
 import { LoginDto } from './dto/login.dto.js';
-import { JwtUserPayload } from '../common/interfaces/jwt-payload.interface.js';
-
-interface JlvUsuarioRow extends RowDataPacket {
-  id: number;
-  jlv_usuario: string;
-  jlv_contrasena: string | null;
-  jlv_nombres: string | null;
-  jlv_grupo: string | null;
-  jlv_esgrupo: number | null;
-}
+import type {
+  AuthUserResponse,
+  JlvUsuarioRow,
+  JwtUserPayload,
+  LoginResponse,
+} from '../common/types/index.js';
 
 @Injectable()
 export class AuthService {

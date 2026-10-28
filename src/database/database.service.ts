@@ -11,8 +11,7 @@ import mysql, {
   ResultSetHeader,
   RowDataPacket,
 } from 'mysql2/promise';
-
-export type SqlParam = string | number | boolean | Date | Buffer | null;
+import type { SqlParam } from '../common/types/index.js';
 
 @Injectable()
 export class DatabaseService implements OnModuleInit, OnModuleDestroy {

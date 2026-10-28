@@ -3,7 +3,7 @@ import { AuthService } from '../auth.service.js';
 import { LoginDto } from './login.dto.js';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard.js';
 import { CurrentUser } from '../../common/decorators/current-user.decorator.js';
-import { JwtUserPayload } from '../../common/interfaces/jwt-payload.interface.js';
+import type { JwtUserPayload } from '../../common/types/index.js';
 
 @Controller('auth')
 export class AuthController {
