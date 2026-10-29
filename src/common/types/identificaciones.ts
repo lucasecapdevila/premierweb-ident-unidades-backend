@@ -15,6 +15,10 @@ export interface SecuenciaRow extends RowDataPacket {
   estado: number;
 }
 
+export interface CountRow extends RowDataPacket {
+  total: number;
+}
+
 export interface IdentificacionJoinedRow extends RowDataPacket {
   id: number;
   codigo_identificador: string;

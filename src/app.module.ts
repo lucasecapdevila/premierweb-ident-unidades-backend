@@ -5,6 +5,7 @@ import { AppService } from './app.service.js';
 import { DatabaseModule } from './database/database.module.js';
 import { AuthModule } from './auth/dto/auth.module.js';
 import { ArticulosModule } from './articulos/articulos.module.js';
+import { IdentificacionesModule } from './identificaciones/identificaciones.module.js';
 
 @Module({
   imports: [
@@ -14,6 +15,7 @@ import { ArticulosModule } from './articulos/articulos.module.js';
     DatabaseModule,
     AuthModule,
     ArticulosModule,
+    IdentificacionesModule
   ],
   controllers: [AppController],
   providers: [AppService],
