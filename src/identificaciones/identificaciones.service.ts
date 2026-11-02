@@ -141,7 +141,15 @@ export class IdentificacionesService {
   async findAll(
     filterDto: FilterIdentificacionesDto,
   ): Promise<PaginatedIdentificacionesResponse> {
-    const { search, estado, codart, page = 1, limit = 25 } = filterDto;
+    const {
+      search,
+      estado,
+      codart,
+      startDate,
+      endDate,
+      page = 1,
+      limit = 25,
+    } = filterDto;
     const whereClauses: string[] = ["iu.id_borrado = ''"];
     const params: SqlParam[] = [];
 
@@ -153,6 +161,16 @@ export class IdentificacionesService {
     if (codart !== undefined) {
       whereClauses.push('iu.codart_snapshot = ?');
       params.push(codart);
+    }
+
+    if (startDate) {
+      whereClauses.push('iu.fecha_asignacion >= ?');
+      params.push(`${startDate} 00:00:00`);
+    }
+
+    if (endDate) {
+      whereClauses.push('iu.fecha_asignacion <= ?');
+      params.push(`${endDate} 23:59:59`);
     }
 
     if (search && search.trim() !== '') {

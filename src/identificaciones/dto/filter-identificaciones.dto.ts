@@ -1,5 +1,6 @@
+// backend/src/identificaciones/dto/filter-identificaciones.dto.ts
 import { Type } from 'class-transformer';
-import { IsIn, IsInt, IsOptional, IsString, Max, Min } from 'class-validator';
+import { IsDateString, IsIn, IsInt, IsOptional, IsString, Max, Min } from 'class-validator';
 import type { EstadoIdentificacion } from '../../common/types/index.js';
 
 export class FilterIdentificacionesDto {
@@ -18,6 +19,14 @@ export class FilterIdentificacionesDto {
   @Type(() => Number)
   @IsInt()
   codart?: number;
+
+  @IsOptional()
+  @IsDateString({}, { message: 'startDate debe tener un formato de fecha válido (YYYY-MM-DD)' })
+  startDate?: string;
+
+  @IsOptional()
+  @IsDateString({}, { message: 'endDate debe tener un formato de fecha válido (YYYY-MM-DD)' })
+  endDate?: string;
 
   @IsOptional()
   @Type(() => Number)
