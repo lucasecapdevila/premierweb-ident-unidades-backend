@@ -10,8 +10,8 @@ export class FilterIdentificacionesDto {
 
   @IsOptional()
   @IsString()
-  @IsIn(['ACTIVO', 'ANULADO'], {
-    message: 'El estado debe ser ACTIVO o ANULADO',
+  @IsIn(['ACTIVO', 'ANULADO', 'VENDIDA'], {
+    message: 'El estado debe ser ACTIVO, ANULADO o VENDIDA',
   })
   estado?: EstadoIdentificacion;
 

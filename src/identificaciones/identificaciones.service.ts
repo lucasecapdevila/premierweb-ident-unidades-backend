@@ -20,6 +20,7 @@ import type {
   SecuenciaRow,
   SqlParam,
 } from '../common/types/index.js';
+import { VenderIdentificacionDto } from './dto/vender-identificacion.dto.js';
 
 const SECUENCIA_TIPO = 'IDENT_UNIDAD';
 
@@ -336,6 +337,69 @@ export class IdentificacionesService {
     return this.findOneByIdOrCodigo(String(id));
   }
 
+  /**
+   * Marca una unidad ACTIVA como VENDIDA, registrando fecha_venta y actualizando observaciones si se proveen.
+   */
+  async marcarVendida(
+    id: number,
+    dto: VenderIdentificacionDto,
+  ): Promise<IdentificacionResponse> {
+    const actual = await this.findOneByIdOrCodigo(String(id));
+
+    if (actual.estado === 'ANULADO') {
+      throw new ConflictException(
+        `La identificación ${actual.codigoIdentificador} está ANULADA y no puede marcarse como VENDIDA`,
+      );
+    }
+
+    if (actual.estado === 'VENDIDA') {
+      throw new ConflictException(
+        `La identificación ${actual.codigoIdentificador} ya se encuentra registrada como VENDIDA`,
+      );
+    }
+
+    const nuevasObservaciones =
+      dto.observaciones !== undefined
+        ? this.normalizeOptionalString(dto.observaciones)
+        : actual.observaciones;
+
+    await this.databaseService.execute(
+      `UPDATE identificacion_unidad
+       SET estado = 'VENDIDA',
+           observaciones = ?,
+           fecha_venta = NOW(),
+           fecha_actualizacion = NOW()
+       WHERE id = ? AND id_borrado = ''`,
+      [nuevasObservaciones, id],
+    );
+
+    return this.findOneByIdOrCodigo(String(id));
+  }
+
+  /**
+   * Revierte una unidad VENDIDA al estado ACTIVO (ej. devolución o error de carga), limpiando fecha_venta.
+   */
+  async reactivarVenta(id: number): Promise<IdentificacionResponse> {
+    const actual = await this.findOneByIdOrCodigo(String(id));
+
+    if (actual.estado !== 'VENDIDA') {
+      throw new ConflictException(
+        `Solo se puede reactivar una unidad que esté en estado VENDIDA (estado actual: ${actual.estado})`,
+      );
+    }
+
+    await this.databaseService.execute(
+      `UPDATE identificacion_unidad
+       SET estado = 'ACTIVO',
+           fecha_venta = NULL,
+           fecha_actualizacion = NOW()
+       WHERE id = ? AND id_borrado = ''`,
+      [id],
+    );
+
+    return this.findOneByIdOrCodigo(String(id));
+  }
+
   private getBaseSelectSql(): string {
     return `
       SELECT
@@ -355,6 +419,7 @@ export class IdentificacionesService {
         iu.usuario_anulacion_id,
         iu.fecha_asignacion,
         iu.fecha_actualizacion,
+        iu.fecha_venta,
         iu.fecha_anulacion,
         a.jlv_desc AS articulo_desc,
         a.jlv_modelo AS articulo_modelo,
@@ -413,6 +478,7 @@ export class IdentificacionesService {
         : null,
       fechaAsignacion: row.fecha_asignacion,
       fechaActualizacion: row.fecha_actualizacion,
+      fechaVenta: row.fecha_venta,
       fechaAnulacion: row.fecha_anulacion,
     };
   }

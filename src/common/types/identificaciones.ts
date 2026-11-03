@@ -1,6 +1,6 @@
 import { RowDataPacket } from 'mysql2/promise';
 
-export type EstadoIdentificacion = 'ACTIVO' | 'ANULADO';
+export type EstadoIdentificacion = 'ACTIVO' | 'ANULADO' | 'VENDIDA';
 
 export type MotivoAsignacion =
   | 'ESTANDAR'
@@ -36,6 +36,7 @@ export interface IdentificacionJoinedRow extends RowDataPacket {
   usuario_anulacion_id: number | null;
   fecha_asignacion: Date | string;
   fecha_actualizacion: Date | string;
+  fecha_venta: Date | string | null;
   fecha_anulacion: Date | string | null;
   articulo_desc: string | null;
   articulo_modelo: string | null;
@@ -73,6 +74,7 @@ export interface IdentificacionResponse {
   } | null;
   fechaAsignacion: Date | string;
   fechaActualizacion: Date | string;
+  fechaVenta: Date | string | null;
   fechaAnulacion: Date | string | null;
 }
 

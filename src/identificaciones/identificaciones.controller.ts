@@ -17,6 +17,7 @@ import { FilterIdentificacionesDto } from './dto/filter-identificaciones.dto.js'
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard.js';
 import { CurrentUser } from '../common/decorators/current-user.decorator.js';
 import type { JwtUserPayload } from '../common/types/index.js';
+import { VenderIdentificacionDto } from './dto/vender-identificacion.dto.js';
 
 @Controller('identificaciones')
 @UseGuards(JwtAuthGuard)
@@ -58,5 +59,18 @@ export class IdentificacionesController {
     @CurrentUser() user: JwtUserPayload,
   ) {
     return this.identificacionesService.anular(id, anularDto, user.sub);
+  }
+
+  @Patch(':id/vender')
+  async marcarVendida(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() venderDto: VenderIdentificacionDto,
+  ) {
+    return this.identificacionesService.marcarVendida(id, venderDto);
+  }
+
+  @Patch(':id/reactivar')
+  async reactivarVenta(@Param('id', ParseIntPipe) id: number) {
+    return this.identificacionesService.reactivarVenta(id);
   }
 }
