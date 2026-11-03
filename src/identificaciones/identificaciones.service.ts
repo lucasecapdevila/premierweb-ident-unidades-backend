@@ -6,11 +6,6 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { ResultSetHeader } from 'mysql2/promise';
-import { DatabaseService } from '../database/database.service.js';
-import { CreateIdentificacionDto } from './dto/create-identificacion.dto.js';
-import { UpdateIdentificacionDto } from './dto/update-identificacion.dto.js';
-import { AnularIdentificacionDto } from './dto/anular-identificacion.dto.js';
-import { FilterIdentificacionesDto } from './dto/filter-identificaciones.dto.js';
 import type {
   CountRow,
   IdentificacionJoinedRow,
@@ -20,7 +15,14 @@ import type {
   SecuenciaRow,
   SqlParam,
 } from '../common/types/index.js';
-import { VenderIdentificacionDto } from './dto/vender-identificacion.dto.js';
+import { DatabaseService } from '../database/index.js';
+import {
+  AnularIdentificacionDto,
+  CreateIdentificacionDto,
+  FilterIdentificacionesDto,
+  UpdateIdentificacionDto,
+  VenderIdentificacionDto,
+} from './dto/index.js';
 
 const SECUENCIA_TIPO = 'IDENT_UNIDAD';
 

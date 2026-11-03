@@ -6,9 +6,9 @@ import {
   Query,
   UseGuards,
 } from '@nestjs/common';
-import { ArticulosService } from './articulos.service.js';
-import { FilterArticulosDto } from './dto/filter-articulos.dto.js';
-import { JwtAuthGuard } from '../common/guards/jwt-auth.guard.js';
+import { ArticulosService } from './index.js';
+import { FilterArticulosDto } from './dto/index.js';
+import { JwtAuthGuard } from '../common/index.js';
 
 @Controller('articulos')
 @UseGuards(JwtAuthGuard)

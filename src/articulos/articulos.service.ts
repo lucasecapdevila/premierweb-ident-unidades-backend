@@ -7,7 +7,6 @@ import type {
   SqlParam,
 } from '../common/types/index.js';
 
-
 @Injectable()
 export class ArticulosService {
   constructor(private readonly databaseService: DatabaseService) {}

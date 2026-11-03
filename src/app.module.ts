@@ -1,11 +1,11 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { DatabaseModule } from './database/index.js';
+import { AuthModule } from './auth/index.js';
+import { ArticulosModule } from './articulos/index.js';
+import { IdentificacionesModule } from './identificaciones/index.js';
 import { AppController } from './app.controller.js';
 import { AppService } from './app.service.js';
-import { DatabaseModule } from './database/database.module.js';
-import { AuthModule } from './auth/dto/auth.module.js';
-import { ArticulosModule } from './articulos/articulos.module.js';
-import { IdentificacionesModule } from './identificaciones/identificaciones.module.js';
 
 @Module({
   imports: [
@@ -15,7 +15,7 @@ import { IdentificacionesModule } from './identificaciones/identificaciones.modu
     DatabaseModule,
     AuthModule,
     ArticulosModule,
-    IdentificacionesModule
+    IdentificacionesModule,
   ],
   controllers: [AppController],
   providers: [AppService],

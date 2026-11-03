@@ -70,7 +70,10 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
   /**
    * Ejecuta un INSERT, UPDATE o DELETE fuera de una transacción compleja
    */
-  async execute(sql: string, params: SqlParam[] = []): Promise<ResultSetHeader> {
+  async execute(
+    sql: string,
+    params: SqlParam[] = [],
+  ): Promise<ResultSetHeader> {
     const [result] = await this.pool.execute<ResultSetHeader>(sql, params);
     return result;
   }

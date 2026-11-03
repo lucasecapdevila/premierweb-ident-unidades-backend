@@ -3,10 +3,7 @@ import { RowDataPacket } from 'mysql2/promise';
 export type EstadoIdentificacion = 'ACTIVO' | 'ANULADO' | 'VENDIDA';
 
 export type MotivoAsignacion =
-  | 'ESTANDAR'
-  | 'SIN_NUMERO_ORIGINAL'
-  | 'ILEGIBLE'
-  | 'INACCESIBLE';
+  'ESTANDAR' | 'SIN_NUMERO_ORIGINAL' | 'ILEGIBLE' | 'INACCESIBLE';
 
 export interface SecuenciaRow extends RowDataPacket {
   id: number;

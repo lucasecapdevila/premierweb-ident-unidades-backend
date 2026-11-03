@@ -26,12 +26,16 @@ export class CreateIdentificacionDto {
 
   @IsOptional()
   @IsString()
-  @MaxLength(50, { message: 'El número de chasis no puede superar 50 caracteres' })
+  @MaxLength(50, {
+    message: 'El número de chasis no puede superar 50 caracteres',
+  })
   nroChasisOriginal?: string;
 
   @IsOptional()
   @IsString()
-  @MaxLength(50, { message: 'El número de motor no puede superar 50 caracteres' })
+  @MaxLength(50, {
+    message: 'El número de motor no puede superar 50 caracteres',
+  })
   nroMotorOriginal?: string;
 
   @IsOptional()
@@ -49,6 +53,8 @@ export class CreateIdentificacionDto {
 
   @IsOptional()
   @IsString()
-  @MaxLength(255, { message: 'Las observaciones no pueden superar 255 caracteres' })
+  @MaxLength(255, {
+    message: 'Las observaciones no pueden superar 255 caracteres',
+  })
   observaciones?: string;
 }

@@ -1,6 +1,8 @@
 import { Module } from '@nestjs/common';
-import { IdentificacionesController } from './identificaciones.controller.js';
-import { IdentificacionesService } from './identificaciones.service.js';
+import {
+  IdentificacionesController,
+  IdentificacionesService,
+} from './index.js';
 
 @Module({
   controllers: [IdentificacionesController],
