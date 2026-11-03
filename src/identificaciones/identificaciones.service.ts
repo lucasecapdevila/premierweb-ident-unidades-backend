@@ -163,14 +163,14 @@ export class IdentificacionesService {
       params.push(codart);
     }
 
-    if (startDate) {
+    if (startDate && startDate.trim() !== '') {
       whereClauses.push('iu.fecha_asignacion >= ?');
-      params.push(`${startDate} 00:00:00`);
+      params.push(`${startDate.trim()} 00:00:00`);
     }
 
-    if (endDate) {
+    if (endDate && endDate.trim() !== '') {
       whereClauses.push('iu.fecha_asignacion <= ?');
-      params.push(`${endDate} 23:59:59`);
+      params.push(`${endDate.trim()} 23:59:59`);
     }
 
     if (search && search.trim() !== '') {
