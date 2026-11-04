@@ -84,3 +84,10 @@ export interface PaginatedIdentificacionesResponse {
     totalPages: number;
   };
 }
+
+export interface BulkCreateIdentificacionesResponse {
+  cantidadCreada: number;
+  primerCodigo: string;
+  ultimoCodigo: string;
+  items: IdentificacionResponse[];
+}

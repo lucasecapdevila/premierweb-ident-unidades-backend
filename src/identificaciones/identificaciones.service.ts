@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import { ResultSetHeader } from 'mysql2/promise';
 import type {
+  BulkCreateIdentificacionesResponse,
   CountRow,
   IdentificacionJoinedRow,
   IdentificacionResponse,
@@ -18,6 +19,7 @@ import type {
 import { DatabaseService } from '../database/index.js';
 import {
   AnularIdentificacionDto,
+  CreateBulkIdentificacionDto,
   CreateIdentificacionDto,
   FilterIdentificacionesDto,
   UpdateIdentificacionDto,
@@ -136,6 +138,145 @@ export class IdentificacionesService {
 
     // 6. Confirmada la transacción, devolver el registro completo persistido
     return this.findOneByIdOrCodigo(String(insertedId));
+  }
+
+  /**
+   * Genera un lote masivo de identificaciones (2 a 100 unidades) en una única transacción ACID.
+   * Reserva el bloque de correlativos en un solo paso e inserta todas las filas en bloque.
+   */
+  async createBulk(
+    dto: CreateBulkIdentificacionDto,
+    usuarioId: number,
+  ): Promise<BulkCreateIdentificacionesResponse> {
+    const cantidad = Number(dto.cantidad);
+
+    const { correlativoInicial, correlativoFinal } =
+      await this.databaseService.withTransaction<{
+        correlativoInicial: number;
+        correlativoFinal: number;
+      }>(async (connection) => {
+        // 1. Verificar artículo activo en rubros 13 o 14
+        const [articulos] = await connection.execute<JlvArticuloRow[]>(
+          `SELECT id, jlv_codart, jlv_desc, jlv_modelo, jlv_rubro, jlv_estado
+           FROM jlv_articulo
+           WHERE id = ?
+             AND (id_borrado IS NULL OR id_borrado = '')
+             AND (jlv_estado IS NULL OR jlv_estado <> 9)
+             AND jlv_rubro IN (13, 14)
+             AND jlv_codart IS NOT NULL
+             AND jlv_codart BETWEEN 1 AND 9999
+           LIMIT 1`,
+          [dto.articuloId],
+        );
+
+        const articulo = articulos[0];
+        if (!articulo) {
+          throw new BadRequestException(
+            `El artículo seleccionado (ID ${dto.articuloId}) no existe, está inactivo o no pertenece a los rubros habilitados (13 o 14)`,
+          );
+        }
+
+        // 2. Bloquear exclusivamente la fila IDENT_UNIDAD en secuencias
+        const [secuencias] = await connection.execute<SecuenciaRow[]>(
+          `SELECT id, tipo, valor_actual, estado
+           FROM secuencias
+           WHERE tipo = ?
+             AND id_borrado = ''
+             AND estado <> 9
+           LIMIT 1
+           FOR UPDATE`,
+          [SECUENCIA_TIPO],
+        );
+
+        const secuencia = secuencias[0];
+        if (!secuencia) {
+          throw new InternalServerErrorException(
+            `No se encontró una secuencia activa para '${SECUENCIA_TIPO}' en la tabla secuencias`,
+          );
+        }
+
+        // 3. Reservar bloque completo de correlativos de una sola vez
+        const valorBase = Number(secuencia.valor_actual);
+        const inicio = valorBase + 1;
+        const fin = valorBase + cantidad;
+
+        await connection.execute<ResultSetHeader>(
+          `UPDATE secuencias
+           SET valor_actual = ?,
+               fecha_actualizacion = CURDATE(),
+               hora_actualizacion = CURTIME()
+           WHERE id = ?`,
+          [fin, secuencia.id],
+        );
+
+        // 4. Armar inserción multi-fila (batch insert)
+        const codartFormateado = String(articulo.jlv_codart).padStart(4, '0');
+        const colorNormalizado = this.normalizeOptionalString(dto.color);
+        const motivo = dto.motivoAsignacion ?? 'ESTANDAR';
+        const obsNormalizada = this.normalizeOptionalString(dto.observaciones);
+
+        const valuesPlaceholders: string[] = [];
+        const insertParams: SqlParam[] = [];
+
+        for (let corr = inicio; corr <= fin; corr++) {
+          const correlativoFormateado = String(corr).padStart(5, '0');
+          const codigoIdentificador = `${codartFormateado}-${correlativoFormateado}`;
+
+          valuesPlaceholders.push(
+            "('', ?, ?, ?, ?, NULL, NULL, ?, ?, ?, 'ACTIVO', ?, NOW(), NOW())",
+          );
+          insertParams.push(
+            codigoIdentificador,
+            corr,
+            articulo.id,
+            articulo.jlv_codart,
+            colorNormalizado,
+            motivo,
+            obsNormalizada,
+            usuarioId,
+          );
+        }
+
+        await connection.execute<ResultSetHeader>(
+          `INSERT INTO identificacion_unidad (
+            id_borrado,
+            codigo_identificador,
+            correlativo,
+            articulo_id,
+            codart_snapshot,
+            nro_chasis_original,
+            nro_motor_original,
+            color,
+            motivo_asignacion,
+            observaciones,
+            estado,
+            usuario_creacion_id,
+            fecha_asignacion,
+            fecha_actualizacion
+          ) VALUES ${valuesPlaceholders.join(', ')}`,
+          insertParams,
+        );
+
+        return { correlativoInicial: inicio, correlativoFinal: fin };
+      });
+
+    // 5. Recuperar todos los registros creados en el lote ordenados de forma ascendente
+    const rows = await this.databaseService.query<IdentificacionJoinedRow[]>(
+      `${this.getBaseSelectSql()}
+       WHERE iu.correlativo BETWEEN ? AND ?
+         AND iu.id_borrado = ''
+       ORDER BY iu.correlativo ASC`,
+      [correlativoInicial, correlativoFinal],
+    );
+
+    const items = rows.map((row) => this.mapRowToResponse(row));
+
+    return {
+      cantidadCreada: items.length,
+      primerCodigo: items[0]?.codigoIdentificador ?? '',
+      ultimoCodigo: items[items.length - 1]?.codigoIdentificador ?? '',
+      items,
+    };
   }
 
   /**

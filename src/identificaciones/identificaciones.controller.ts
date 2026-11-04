@@ -12,6 +12,7 @@ import {
 import { CurrentUser, JwtAuthGuard, JwtUserPayload } from '../common/index.js';
 import {
   AnularIdentificacionDto,
+  CreateBulkIdentificacionDto,
   CreateIdentificacionDto,
   FilterIdentificacionesDto,
   IdentificacionesService,
@@ -32,6 +33,14 @@ export class IdentificacionesController {
     @CurrentUser() user: JwtUserPayload,
   ) {
     return this.identificacionesService.create(createDto, user.sub);
+  }
+
+  @Post('bulk')
+  async createBulk(
+    @Body() createBulkDto: CreateBulkIdentificacionDto,
+    @CurrentUser() user: JwtUserPayload,
+  ) {
+    return this.identificacionesService.createBulk(createBulkDto, user.sub);
   }
 
   @Get()
