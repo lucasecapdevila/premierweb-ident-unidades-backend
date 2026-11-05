@@ -642,7 +642,11 @@ export class IdentificacionesService {
       { header: 'Fecha Alta', key: 'fechaAlta', width: 22 },
       { header: 'Fecha Venta', key: 'fechaVenta', width: 22 },
       { header: 'Registrado Por', key: 'usuarioAlta', width: 22 },
-      { header: 'Observaciones / Motivo Baja', key: 'observaciones', width: 38 },
+      {
+        header: 'Observaciones / Motivo Baja',
+        key: 'observaciones',
+        width: 38,
+      },
     ];
 
     const headerRow = sheet.getRow(1);
