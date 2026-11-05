@@ -3,3 +3,4 @@ export * from './auth.js';
 export * from './articulos.js';
 export * from './sucursales.js';
 export * from './identificaciones.js';
+export * from './stock.js';

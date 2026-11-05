@@ -17,6 +17,9 @@ import {
   type SecuenciaRow,
   type CountRow,
   type SqlParam,
+  StockArticuloItem,
+  StockConsolidadoRow,
+  StockSummaryResponse,
 } from '../common/index.js';
 import { DatabaseService } from '../database/index.js';
 import {
@@ -24,6 +27,7 @@ import {
   CreateBulkIdentificacionDto,
   CreateIdentificacionDto,
   FilterIdentificacionesDto,
+  FilterStockDto,
   UpdateIdentificacionDto,
   VenderIdentificacionDto,
 } from './dto/index.js';
@@ -375,6 +379,105 @@ export class IdentificacionesService {
         totalPages: Math.ceil(total / safeLimit) || 1,
       },
     };
+  }
+
+  /**
+   * Obtiene el resumen de stock activo consolidado por artículo y desglosado en las 4 sucursales.
+   */
+  async getStockSummary(
+    filterDto: FilterStockDto,
+  ): Promise<StockSummaryResponse> {
+    const { search, rubro, soloConStock } = filterDto;
+    const whereClauses: string[] = [
+      "(a.id_borrado IS NULL OR a.id_borrado = '')",
+      '(a.jlv_estado IS NULL OR a.jlv_estado <> 9)',
+      'a.jlv_rubro IN (13, 14)',
+      'a.jlv_codart IS NOT NULL',
+      'a.jlv_codart BETWEEN 1 AND 9999',
+    ];
+    const params: SqlParam[] = [];
+
+    if (rubro !== undefined) {
+      whereClauses.push('a.jlv_rubro = ?');
+      params.push(rubro);
+    }
+
+    if (search && search.trim() !== '') {
+      const term = `%${search.trim()}%`;
+      whereClauses.push(`(
+        CAST(a.jlv_codart AS CHAR) LIKE ?
+        OR a.jlv_desc LIKE ?
+        OR a.jlv_modelo LIKE ?
+      )`);
+      params.push(term, term, term);
+    }
+
+    const havingSql = soloConStock
+      ? "HAVING SUM(CASE WHEN iu.estado = 'ACTIVO' THEN 1 ELSE 0 END) > 0"
+      : '';
+
+    const rows = await this.databaseService.query<StockConsolidadoRow[]>(
+      `SELECT
+        a.id AS articulo_id,
+        a.jlv_codart AS codart,
+        a.jlv_desc AS descripcion,
+        a.jlv_modelo AS modelo,
+        a.jlv_rubro AS rubro,
+        a.jlv_prpu AS precio,
+        SUM(CASE WHEN iu.estado = 'ACTIVO' AND iu.sucursal_id = 1 THEN 1 ELSE 0 END) AS stk_agu,
+        SUM(CASE WHEN iu.estado = 'ACTIVO' AND iu.sucursal_id = 2 THEN 1 ELSE 0 END) AS stk_alb,
+        SUM(CASE WHEN iu.estado = 'ACTIVO' AND iu.sucursal_id = 3 THEN 1 ELSE 0 END) AS stk_con,
+        SUM(CASE WHEN iu.estado = 'ACTIVO' AND iu.sucursal_id = 9 THEN 1 ELSE 0 END) AS stk_smt,
+        SUM(CASE WHEN iu.estado = 'ACTIVO' THEN 1 ELSE 0 END) AS stk_total,
+        SUM(CASE WHEN iu.estado = 'VENDIDA' THEN 1 ELSE 0 END) AS vta_total
+       FROM jlv_articulo a
+       LEFT JOIN identificacion_unidad iu
+         ON iu.articulo_id = a.id AND iu.id_borrado = ''
+       WHERE ${whereClauses.join(' AND ')}
+       GROUP BY a.id, a.jlv_codart, a.jlv_desc, a.jlv_modelo, a.jlv_rubro, a.jlv_prpu
+       ${havingSql}
+       ORDER BY stk_total DESC, a.jlv_codart ASC`,
+      params,
+    );
+
+    const kpis = {
+      totalActivas: 0,
+      agu: 0,
+      alb: 0,
+      con: 0,
+      smt: 0,
+      totalVendidas: 0,
+    };
+
+    const items: StockArticuloItem[] = rows.map((row) => {
+      const agu = Number(row.stk_agu ?? 0);
+      const alb = Number(row.stk_alb ?? 0);
+      const con = Number(row.stk_con ?? 0);
+      const smt = Number(row.stk_smt ?? 0);
+      const total = Number(row.stk_total ?? 0);
+      const ventas = Number(row.vta_total ?? 0);
+
+      kpis.agu += agu;
+      kpis.alb += alb;
+      kpis.con += con;
+      kpis.smt += smt;
+      kpis.totalActivas += total;
+      kpis.totalVendidas += ventas;
+
+      return {
+        articuloId: row.articulo_id,
+        codart: row.codart,
+        codartFormateado: String(row.codart).padStart(4, '0'),
+        descripcion: (row.descripcion ?? '').trim(),
+        modelo: row.modelo ? row.modelo.trim() : null,
+        rubro: row.rubro,
+        precio: Number(row.precio ?? 0),
+        stockPorSucursal: { agu, alb, con, smt, total },
+        ventasTotales: ventas,
+      };
+    });
+
+    return { kpis, items };
   }
 
   /**

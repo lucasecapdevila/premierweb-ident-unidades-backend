@@ -21,6 +21,7 @@ import {
   CreateBulkIdentificacionDto,
   CreateIdentificacionDto,
   FilterIdentificacionesDto,
+  FilterStockDto,
   UpdateIdentificacionDto,
   VenderIdentificacionDto,
 } from './dto/index.js';
@@ -71,6 +72,11 @@ export class IdentificacionesController {
       `attachment; filename="Auditoria_Unidades_${fecha}.xlsx"`,
     );
     res.send(buffer);
+  }
+
+  @Get('stock')
+  async getStock(@Query() filterStockDto: FilterStockDto) {
+    return this.identificacionesService.getStockSummary(filterStockDto);
   }
 
   @Get(':idOrCodigo')
