@@ -6,7 +6,7 @@ import {
   InternalServerErrorException,
   NotFoundException,
 } from '@nestjs/common';
-import { ResultSetHeader } from 'mysql2/promise';
+import { ResultSetHeader, RowDataPacket } from 'mysql2/promise';
 import {
   getSucursalById,
   type BulkCreateIdentificacionesResponse,
@@ -572,81 +572,107 @@ export class IdentificacionesService {
   }
 
   /**
-   * Genera un archivo Excel (.xlsx) con todas las unidades que coincidan con los filtros activos.
+   * Genera un archivo Excel (.xlsx) consolidado por artículo con desglose de stock por sucursal,
+   * datos financieros de jlv_articulo y contadores de ventas.
    */
   async exportExcel(filterDto: FilterIdentificacionesDto): Promise<Buffer> {
-    const { search, estado, codart, sucursalId, startDate, endDate } =
-      filterDto;
-    const whereClauses: string[] = ["iu.id_borrado = ''"];
+    const { search, rubro, startDate, endDate } = filterDto;
+    const whereClauses: string[] = [
+      "(a.id_borrado IS NULL OR a.id_borrado = '')",
+      '(a.jlv_estado IS NULL OR a.jlv_estado <> 9)',
+      'a.jlv_rubro IN (13, 14)',
+      'a.jlv_codart IS NOT NULL',
+    ];
     const params: SqlParam[] = [];
 
-    if (estado) {
-      whereClauses.push('iu.estado = ?');
-      params.push(estado);
-    }
-
-    if (codart !== undefined) {
-      whereClauses.push('iu.codart_snapshot = ?');
-      params.push(codart);
-    }
-
-    if (sucursalId !== undefined) {
-      whereClauses.push('iu.sucursal_id = ?');
-      params.push(sucursalId);
-    }
-
-    if (startDate && startDate.trim() !== '') {
-      whereClauses.push('iu.fecha_asignacion >= ?');
-      params.push(`${startDate.trim()} 00:00:00`);
-    }
-
-    if (endDate && endDate.trim() !== '') {
-      whereClauses.push('iu.fecha_asignacion <= ?');
-      params.push(`${endDate.trim()} 23:59:59`);
+    if (rubro !== undefined) {
+      whereClauses.push('a.jlv_rubro = ?');
+      params.push(rubro);
     }
 
     if (search && search.trim() !== '') {
       const term = `%${search.trim()}%`;
       whereClauses.push(`(
-        iu.codigo_identificador LIKE ?
-        OR CAST(iu.codart_snapshot AS CHAR) LIKE ?
+        CAST(a.jlv_codart AS CHAR) LIKE ?
         OR a.jlv_desc LIKE ?
-        OR iu.nro_chasis_original LIKE ?
-        OR iu.nro_motor_original LIKE ?
+        OR a.jlv_modelo LIKE ?
       )`);
-      params.push(term, term, term, term, term);
+      params.push(term, term, term);
     }
 
-    const rows = await this.databaseService.query<IdentificacionJoinedRow[]>(
-      `${this.getBaseSelectSql()}
-       WHERE ${whereClauses.join(' AND ')}
-       ORDER BY iu.correlativo DESC`,
-      params,
-    );
+    // Filtros opcionales de fecha para acotar el cálculo de ventas si se proveen
+    const dateWhereVentas: string[] = [];
+    if (startDate && startDate.trim() !== '') {
+      dateWhereVentas.push('iu.fecha_venta >= ?');
+      params.push(`${startDate.trim()} 00:00:00`);
+    }
+    if (endDate && endDate.trim() !== '') {
+      dateWhereVentas.push('iu.fecha_venta <= ?');
+      params.push(`${endDate.trim()} 23:59:59`);
+    }
+    const dateVentasSql =
+      dateWhereVentas.length > 0 ? `AND ${dateWhereVentas.join(' AND ')}` : '';
+
+    const sql = `
+      SELECT 
+        a.jlv_codart AS codart,
+        a.jlv_desc AS descripcion,
+        a.jlv_prco AS costo,
+        a.jlv_perc AS perc,
+        a.jlv_prpu AS precio,
+        a.jlv_fina AS fina,
+        a.jlv_anticipo AS anticipo,
+        a.jlv_pre_final AS plan,
+        a.jlv_precio_cuo AS precio_cuo,
+        -- Stock ACTIVO por sucursal (1: AGU, 2: ALB, 3: CON, 9: SMT)
+        SUM(CASE WHEN iu.estado = 'ACTIVO' AND iu.sucursal_id = 1 THEN 1 ELSE 0 END) AS stk_agu,
+        SUM(CASE WHEN iu.estado = 'ACTIVO' AND iu.sucursal_id = 2 THEN 1 ELSE 0 END) AS stk_alb,
+        SUM(CASE WHEN iu.estado = 'ACTIVO' AND iu.sucursal_id = 3 THEN 1 ELSE 0 END) AS stk_con,
+        SUM(CASE WHEN iu.estado = 'ACTIVO' AND iu.sucursal_id = 9 THEN 1 ELSE 0 END) AS stk_smt,
+        SUM(CASE WHEN iu.estado = 'ACTIVO' THEN 1 ELSE 0 END) AS stk_total,
+        -- Ventas VENDIDA por sucursal (o según sucursal origen)
+        SUM(CASE WHEN iu.estado = 'VENDIDA' AND iu.sucursal_id = 1 ${dateVentasSql} THEN 1 ELSE 0 END) as vta_agu,
+        SUM(CASE WHEN iu.estado = 'VENDIDA' AND iu.sucursal_id = 2 ${dateVentasSql} THEN 1 ELSE 0 END) as vta_alb,
+        SUM(CASE WHEN iu.estado = 'VENDIDA' AND iu.sucursal_id = 3 ${dateVentasSql} THEN 1 ELSE 0 END) as vta_con,
+        SUM(CASE WHEN iu.estado = 'VENDIDA' AND iu.sucursal_id = 9 ${dateVentasSql} THEN 1 ELSE 0 END) as vta_smt,
+        SUM(CASE WHEN iu.estado = 'VENDIDA' ${dateVentasSql} THEN 1 ELSE 0 END) as vta_total
+      FROM jlv_articulo a
+      LEFT JOIN identificacion_unidad iu ON iu.articulo_id = a.id AND (iu.id_borrado IS NULL OR iu.id_borrado = '')
+      WHERE ${whereClauses.join(' AND ')}
+      GROUP BY a.jlv_codart, a.jlv_desc, a.jlv_prco, a.jlv_perc, a.jlv_prpu, a.jlv_fina, a.jlv_anticipo, a.jlv_pre_final, a.jlv_precio_cuo
+      ORDER BY a.jlv_codart ASC
+    `;
+
+    const rows = await this.databaseService.query<RowDataPacket[]>(sql, params);
 
     const workbook = new ExcelJS.Workbook();
     workbook.creator = 'Broal E-Bikes - Sistema de Identificación';
     workbook.created = new Date();
 
-    const sheet = workbook.addWorksheet('Auditoría de Unidades');
+    const sheet = workbook.addWorksheet('Reporte Consolidado');
 
+    // Columnas exactas solicitadas
     sheet.columns = [
-      { header: 'Código', key: 'codigo', width: 16 },
-      { header: 'Cód. Art.', key: 'codart', width: 12 },
-      { header: 'Descripción del Artículo', key: 'articulo', width: 36 },
-      { header: 'Sucursal', key: 'sucursal', width: 24 },
-      { header: 'Color', key: 'color', width: 16 },
-      { header: 'Chasis Original', key: 'chasis', width: 24 },
-      { header: 'Motor Original', key: 'motor', width: 24 },
-      { header: 'Estado', key: 'estado', width: 14 },
-      { header: 'Fecha Alta', key: 'fechaAlta', width: 22 },
-      { header: 'Fecha Venta', key: 'fechaVenta', width: 22 },
-      { header: 'Registrado Por', key: 'usuarioAlta', width: 22 },
-      {
-        header: 'Observaciones / Motivo Baja',
-        key: 'observaciones',
-        width: 38,
-      },
+      { header: 'codart', key: 'codart', width: 12 },
+      { header: 'desc', key: 'desc', width: 35 },
+      { header: 'agu', key: 'agu', width: 10 },
+      { header: 'con', key: 'con', width: 10 },
+      { header: 'alb', key: 'alb', width: 10 },
+      { header: 'smt', key: 'smt', width: 10 },
+      { header: 'total', key: 'total', width: 10 },
+      { header: 'costo (jlv_prco)', key: 'costo', width: 16 },
+      { header: 'perc', key: 'perc', width: 12 },
+      { header: 'precio (jlv_prpu)', key: 'precio', width: 16 },
+      { header: 'fina', key: 'fina', width: 12 },
+      { header: 'anticipo', key: 'anticipo', width: 16 },
+      { header: 'plan', key: 'plan', width: 16 },
+      { header: 'precio_cuo', key: 'precio_cuo', width: 16 },
+      { header: 'tot_financ', key: 'tot_financ', width: 16 },
+      { header: 'Ventas AGU', key: 'vta_agu', width: 14 },
+      { header: 'Ventas ALB', key: 'vta_alb', width: 14 },
+      { header: 'Ventas CON', key: 'vta_con', width: 14 },
+      { header: 'Ventas SMT', key: 'vta_smt', width: 14 },
+      { header: 'Total Ventas', key: 'vta_total', width: 14 },
     ];
 
     const headerRow = sheet.getRow(1);
@@ -657,39 +683,33 @@ export class IdentificacionesService {
       fgColor: { argb: 'FF1E3A8A' },
     };
 
-    const dateOptions: Intl.DateTimeFormatOptions = {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-      hour12: false,
-    };
-
     for (const row of rows) {
-      const item = this.mapRowToResponse(row);
+      const costo = Number(row.costo ?? 0);
+      const fina = Number(row.fina ?? 0);
+      // tot_financ calculado como estimado o basado en plan / precio
+      const totFinanc = Number(row.plan ?? 0);
+
       sheet.addRow({
-        codigo: item.codigoIdentificador,
-        codart: item.articulo.codartFormateado,
-        articulo: item.articulo.descripcion,
-        sucursal: `${item.sucursal.nombre} (${item.sucursal.ciudad})`,
-        color: item.color ?? '—',
-        chasis: item.nroChasisOriginal ?? '—',
-        motor: item.nroMotorOriginal ?? '—',
-        estado: item.estado,
-        fechaAlta: new Date(item.fechaAsignacion).toLocaleString(
-          'es-AR',
-          dateOptions,
-        ),
-        fechaVenta: item.fechaVenta
-          ? new Date(item.fechaVenta).toLocaleString('es-AR', dateOptions)
-          : '—',
-        usuarioAlta:
-          item.usuarioCreacion.nombre ?? `ID #${item.usuarioCreacion.id}`,
-        observaciones: item.motivoAnulacion
-          ? `[ANULADO: ${item.motivoAnulacion}]`
-          : (item.observaciones ?? '—'),
+        codart: String(row.codart).padStart(4, '0'),
+        desc: (row.descripcion ?? '').trim(),
+        agu: Number(row.stk_agu ?? 0),
+        con: Number(row.stk_con ?? 0),
+        alb: Number(row.stk_alb ?? 0),
+        smt: Number(row.stk_smt ?? 0),
+        total: Number(row.stk_total ?? 0),
+        costo: costo,
+        perc: Number(row.perc ?? 0),
+        precio: Number(row.precio ?? 0),
+        fina: fina,
+        anticipo: Number(row.anticipo ?? 0),
+        plan: Number(row.plan ?? 0),
+        precio_cuo: Number(row.precio_cuo ?? 0),
+        tot_financ: totFinanc,
+        vta_agu: Number(row.vta_agu ?? 0),
+        vta_alb: Number(row.vta_alb ?? 0),
+        vta_con: Number(row.vta_con ?? 0),
+        vta_smt: Number(row.vta_smt ?? 0),
+        vta_total: Number(row.vta_total ?? 0),
       });
     }
 

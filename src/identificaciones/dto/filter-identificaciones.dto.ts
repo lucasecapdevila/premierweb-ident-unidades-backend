@@ -38,6 +38,12 @@ export class FilterIdentificacionesDto {
 
   @IsOptional()
   @Type(() => Number)
+  @IsInt()
+  @IsIn([13, 14], { message: 'El rubro debe ser 13 o 14' })
+  rubro?: number;
+
+  @IsOptional()
+  @Type(() => Number)
   @IsInt({ message: 'sucursalId debe ser un número entero' })
   @IsIn(SUCURSALES_IDS, {
     message: 'El filtro sucursalId debe ser 1, 2, 3 o 9',
