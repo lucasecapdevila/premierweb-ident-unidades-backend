@@ -7,18 +7,24 @@ import {
   Patch,
   Post,
   Query,
+  Res,
   UseGuards,
 } from '@nestjs/common';
-import { CurrentUser, JwtAuthGuard, JwtUserPayload } from '../common/index.js';
+import type { Response } from 'express';
+import {
+  CurrentUser,
+  JwtAuthGuard,
+  type JwtUserPayload,
+} from '../common/index.js';
 import {
   AnularIdentificacionDto,
   CreateBulkIdentificacionDto,
   CreateIdentificacionDto,
   FilterIdentificacionesDto,
-  IdentificacionesService,
   UpdateIdentificacionDto,
   VenderIdentificacionDto,
-} from './index.js';
+} from './dto/index.js';
+import { IdentificacionesService } from './identificaciones.service.js';
 
 @Controller('identificaciones')
 @UseGuards(JwtAuthGuard)
@@ -48,17 +54,49 @@ export class IdentificacionesController {
     return this.identificacionesService.findAll(filterDto);
   }
 
+  @Get('export/excel')
+  async exportExcel(
+    @Query() filterDto: FilterIdentificacionesDto,
+    @Res() res: Response,
+  ) {
+    const buffer = await this.identificacionesService.exportExcel(filterDto);
+    const fecha = new Date().toISOString().slice(0, 10);
+
+    res.setHeader(
+      'Content-Type',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    );
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="Auditoria_Unidades_${fecha}.xlsx"`,
+    );
+    res.send(buffer);
+  }
+
   @Get(':idOrCodigo')
   async findOne(@Param('idOrCodigo') idOrCodigo: string) {
     return this.identificacionesService.findOneByIdOrCodigo(idOrCodigo);
   }
 
   @Patch(':id')
-  async updateDatosDescriptivos(
+  async update(
     @Param('id', ParseIntPipe) id: number,
     @Body() updateDto: UpdateIdentificacionDto,
   ) {
     return this.identificacionesService.updateDatosDescriptivos(id, updateDto);
+  }
+
+  @Patch(':id/vender')
+  async vender(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() venderDto: VenderIdentificacionDto,
+  ) {
+    return this.identificacionesService.marcarVendida(id, venderDto);
+  }
+
+  @Patch(':id/reactivar')
+  async reactivar(@Param('id', ParseIntPipe) id: number) {
+    return this.identificacionesService.reactivarVenta(id);
   }
 
   @Patch(':id/anular')
@@ -68,18 +106,5 @@ export class IdentificacionesController {
     @CurrentUser() user: JwtUserPayload,
   ) {
     return this.identificacionesService.anular(id, anularDto, user.sub);
-  }
-
-  @Patch(':id/vender')
-  async marcarVendida(
-    @Param('id', ParseIntPipe) id: number,
-    @Body() venderDto: VenderIdentificacionDto,
-  ) {
-    return this.identificacionesService.marcarVendida(id, venderDto);
-  }
-
-  @Patch(':id/reactivar')
-  async reactivarVenta(@Param('id', ParseIntPipe) id: number) {
-    return this.identificacionesService.reactivarVenta(id);
   }
 }

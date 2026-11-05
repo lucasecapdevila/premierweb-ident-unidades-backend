@@ -1,5 +1,10 @@
-import { IsIn, IsOptional, IsString, MaxLength } from 'class-validator';
-import type { MotivoAsignacion } from '../../common/types/index.js';
+import { Type } from 'class-transformer';
+import { IsIn, IsInt, IsOptional, IsString, MaxLength } from 'class-validator';
+import {
+  SUCURSALES_IDS,
+  type MotivoAsignacion,
+  type SucursalId,
+} from '../../common/index.js';
 
 const MOTIVOS_VALIDOS: MotivoAsignacion[] = [
   'ESTANDAR',
@@ -10,23 +15,31 @@ const MOTIVOS_VALIDOS: MotivoAsignacion[] = [
 
 export class UpdateIdentificacionDto {
   @IsOptional()
+  @Type(() => Number)
+  @IsInt({ message: 'sucursalId debe ser un número entero' })
+  @IsIn(SUCURSALES_IDS, {
+    message: 'sucursalId debe ser una sucursal válida (1, 2, 3 o 9)',
+  })
+  sucursalId?: SucursalId;
+
+  @IsOptional()
   @IsString()
   @MaxLength(50, {
     message: 'El número de chasis no puede superar 50 caracteres',
   })
-  nroChasisOriginal?: string | null;
+  nroChasisOriginal?: string;
 
   @IsOptional()
   @IsString()
   @MaxLength(50, {
     message: 'El número de motor no puede superar 50 caracteres',
   })
-  nroMotorOriginal?: string | null;
+  nroMotorOriginal?: string;
 
   @IsOptional()
   @IsString()
   @MaxLength(30, { message: 'El color no puede superar 30 caracteres' })
-  color?: string | null;
+  color?: string;
 
   @IsOptional()
   @IsString()
@@ -41,5 +54,5 @@ export class UpdateIdentificacionDto {
   @MaxLength(255, {
     message: 'Las observaciones no pueden superar 255 caracteres',
   })
-  observaciones?: string | null;
+  observaciones?: string;
 }

@@ -1,9 +1,13 @@
-import { RowDataPacket } from 'mysql2/promise';
+import type { RowDataPacket } from 'mysql2/promise';
+import type { Sucursal } from './sucursales.js';
 
 export type EstadoIdentificacion = 'ACTIVO' | 'ANULADO' | 'VENDIDA';
 
 export type MotivoAsignacion =
-  'ESTANDAR' | 'SIN_NUMERO_ORIGINAL' | 'ILEGIBLE' | 'INACCESIBLE';
+  | 'ESTANDAR'
+  | 'SIN_NUMERO_ORIGINAL'
+  | 'ILEGIBLE'
+  | 'INACCESIBLE';
 
 export interface SecuenciaRow extends RowDataPacket {
   id: number;
@@ -12,20 +16,17 @@ export interface SecuenciaRow extends RowDataPacket {
   estado: number;
 }
 
-export interface CountRow extends RowDataPacket {
-  total: number;
-}
-
 export interface IdentificacionJoinedRow extends RowDataPacket {
   id: number;
   codigo_identificador: string;
   correlativo: number;
   articulo_id: number;
+  sucursal_id: number;
   codart_snapshot: number;
   nro_chasis_original: string | null;
   nro_motor_original: string | null;
   color: string | null;
-  motivo_asignacion: string;
+  motivo_asignacion: MotivoAsignacion;
   observaciones: string | null;
   estado: EstadoIdentificacion;
   motivo_anulacion: string | null;
@@ -54,10 +55,11 @@ export interface IdentificacionResponse {
     modelo: string | null;
     rubro: number | null;
   };
+  sucursal: Sucursal;
   nroChasisOriginal: string | null;
   nroMotorOriginal: string | null;
   color: string | null;
-  motivoAsignacion: string;
+  motivoAsignacion: MotivoAsignacion;
   observaciones: string | null;
   estado: EstadoIdentificacion;
   motivoAnulacion: string | null;

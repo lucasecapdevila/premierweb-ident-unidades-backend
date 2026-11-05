@@ -10,7 +10,11 @@ import {
   MaxLength,
   Min,
 } from 'class-validator';
-import type { MotivoAsignacion } from '../../common/types/index.js';
+import {
+  SUCURSALES_IDS,
+  type MotivoAsignacion,
+  type SucursalId,
+} from '../../common/index.js';
 
 const MOTIVOS_VALIDOS: MotivoAsignacion[] = [
   'ESTANDAR',
@@ -36,6 +40,14 @@ export class CreateBulkIdentificacionDto {
   })
   @IsNotEmpty({ message: 'La cantidad de unidades es obligatoria' })
   cantidad!: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt({ message: 'sucursalId debe ser un número entero' })
+  @IsIn(SUCURSALES_IDS, {
+    message: 'sucursalId debe ser una sucursal válida (1, 2, 3 o 9)',
+  })
+  sucursalId?: SucursalId = 1;
 
   @IsOptional()
   @IsString()

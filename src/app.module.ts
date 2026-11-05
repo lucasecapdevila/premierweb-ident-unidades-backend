@@ -1,11 +1,11 @@
 import { Module } from '@nestjs/common';
-import { ConfigModule } from '@nestjs/config';
 import { DatabaseModule } from './database/index.js';
 import { AuthModule } from './auth/index.js';
 import { ArticulosModule } from './articulos/index.js';
 import { IdentificacionesModule } from './identificaciones/index.js';
 import { AppController } from './app.controller.js';
 import { AppService } from './app.service.js';
+import { ConfigModule } from '@nestjs/config';
 
 @Module({
   imports: [

@@ -1,15 +1,24 @@
-// backend/src/identificaciones/dto/filter-identificaciones.dto.ts
 import { Type } from 'class-transformer';
 import {
-  IsDateString,
   IsIn,
   IsInt,
   IsOptional,
   IsString,
+  Matches,
   Max,
   Min,
 } from 'class-validator';
-import type { EstadoIdentificacion } from '../../common/types/index.js';
+import {
+  SUCURSALES_IDS,
+  type EstadoIdentificacion,
+  type SucursalId,
+} from '../../common/index.js';
+
+const ESTADOS_VALIDOS: EstadoIdentificacion[] = [
+  'ACTIVO',
+  'ANULADO',
+  'VENDIDA',
+];
 
 export class FilterIdentificacionesDto {
   @IsOptional()
@@ -17,9 +26,8 @@ export class FilterIdentificacionesDto {
   search?: string;
 
   @IsOptional()
-  @IsString()
-  @IsIn(['ACTIVO', 'ANULADO', 'VENDIDA'], {
-    message: 'El estado debe ser ACTIVO, ANULADO o VENDIDA',
+  @IsIn(ESTADOS_VALIDOS, {
+    message: 'El filtro estado debe ser ACTIVO, ANULADO o VENDIDA',
   })
   estado?: EstadoIdentificacion;
 
@@ -29,17 +37,23 @@ export class FilterIdentificacionesDto {
   codart?: number;
 
   @IsOptional()
-  @IsDateString(
-    {},
-    { message: 'startDate debe tener un formato de fecha válido (YYYY-MM-DD)' },
-  )
+  @Type(() => Number)
+  @IsInt({ message: 'sucursalId debe ser un número entero' })
+  @IsIn(SUCURSALES_IDS, {
+    message: 'El filtro sucursalId debe ser 1, 2, 3 o 9',
+  })
+  sucursalId?: SucursalId;
+
+  @IsOptional()
+  @Matches(/^\d{4}-\d{2}-\d{2}$/, {
+    message: 'startDate debe tener el formato YYYY-MM-DD',
+  })
   startDate?: string;
 
   @IsOptional()
-  @IsDateString(
-    {},
-    { message: 'endDate debe tener un formato de fecha válido (YYYY-MM-DD)' },
-  )
+  @Matches(/^\d{4}-\d{2}-\d{2}$/, {
+    message: 'endDate debe tener el formato YYYY-MM-DD',
+  })
   endDate?: string;
 
   @IsOptional()

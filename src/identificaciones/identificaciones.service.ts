@@ -1,3 +1,4 @@
+import ExcelJS from 'exceljs';
 import {
   BadRequestException,
   ConflictException,
@@ -6,16 +7,17 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { ResultSetHeader } from 'mysql2/promise';
-import type {
-  BulkCreateIdentificacionesResponse,
-  CountRow,
-  IdentificacionJoinedRow,
-  IdentificacionResponse,
-  JlvArticuloRow,
-  PaginatedIdentificacionesResponse,
-  SecuenciaRow,
-  SqlParam,
-} from '../common/types/index.js';
+import {
+  getSucursalById,
+  type BulkCreateIdentificacionesResponse,
+  type IdentificacionJoinedRow,
+  type IdentificacionResponse,
+  type JlvArticuloRow,
+  type PaginatedIdentificacionesResponse,
+  type SecuenciaRow,
+  type CountRow,
+  type SqlParam,
+} from '../common/index.js';
 import { DatabaseService } from '../database/index.js';
 import {
   AnularIdentificacionDto,
@@ -39,6 +41,7 @@ export class IdentificacionesService {
     dto: CreateIdentificacionDto,
     usuarioId: number,
   ): Promise<IdentificacionResponse> {
+    const sucursal = getSucursalById(dto.sucursalId);
     const insertedId = await this.databaseService.withTransaction<number>(
       async (connection) => {
         // 1. Verificar que el artículo exista, esté activo y pertenezca a rubros 13 o 14
@@ -105,6 +108,7 @@ export class IdentificacionesService {
             codigo_identificador,
             correlativo,
             articulo_id,
+            sucursal_id,
             codart_snapshot,
             nro_chasis_original,
             nro_motor_original,
@@ -116,12 +120,13 @@ export class IdentificacionesService {
             fecha_asignacion,
             fecha_actualizacion
           ) VALUES (
-            '', ?, ?, ?, ?, ?, ?, ?, ?, ?, 'ACTIVO', ?, NOW(), NOW()
+            '', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'ACTIVO', ?, NOW(), NOW()
           )`,
           [
             codigoIdentificador,
             nuevoCorrelativo,
             articulo.id,
+            sucursal.id,
             articulo.jlv_codart,
             this.normalizeOptionalString(dto.nroChasisOriginal),
             this.normalizeOptionalString(dto.nroMotorOriginal),
@@ -149,6 +154,7 @@ export class IdentificacionesService {
     usuarioId: number,
   ): Promise<BulkCreateIdentificacionesResponse> {
     const cantidad = Number(dto.cantidad);
+    const sucursal = getSucursalById(dto.sucursalId);
 
     const { correlativoInicial, correlativoFinal } =
       await this.databaseService.withTransaction<{
@@ -223,12 +229,13 @@ export class IdentificacionesService {
           const codigoIdentificador = `${codartFormateado}-${correlativoFormateado}`;
 
           valuesPlaceholders.push(
-            "('', ?, ?, ?, ?, NULL, NULL, ?, ?, ?, 'ACTIVO', ?, NOW(), NOW())",
+            "('', ?, ?, ?, ?, ?, NULL, NULL, ?, ?, ?, 'ACTIVO', ?, NOW(), NOW())",
           );
           insertParams.push(
             codigoIdentificador,
             corr,
             articulo.id,
+            sucursal.id,
             articulo.jlv_codart,
             colorNormalizado,
             motivo,
@@ -243,6 +250,7 @@ export class IdentificacionesService {
             codigo_identificador,
             correlativo,
             articulo_id,
+            sucursal_id,
             codart_snapshot,
             nro_chasis_original,
             nro_motor_original,
@@ -289,6 +297,7 @@ export class IdentificacionesService {
       search,
       estado,
       codart,
+      sucursalId,
       startDate,
       endDate,
       page = 1,
@@ -327,6 +336,11 @@ export class IdentificacionesService {
         OR iu.nro_motor_original LIKE ?
       )`);
       params.push(term, term, term, term, term);
+    }
+
+    if (sucursalId !== undefined) {
+      whereClauses.push('iu.sucursal_id = ?');
+      params.push(sucursalId);
     }
 
     const whereSql = whereClauses.join(' AND ');
@@ -435,16 +449,30 @@ export class IdentificacionesService {
         ? this.normalizeOptionalString(dto.observaciones)
         : actual.observaciones;
 
+    const sucursalId =
+      dto.sucursalId !== undefined
+        ? getSucursalById(dto.sucursalId).id
+        : actual.sucursal.id;
+
     await this.databaseService.execute(
       `UPDATE identificacion_unidad
-       SET nro_chasis_original = ?,
+       SET sucursal_id = ?,
+           nro_chasis_original = ?,
            nro_motor_original = ?,
            color = ?,
            motivo_asignacion = ?,
            observaciones = ?,
            fecha_actualizacion = NOW()
        WHERE id = ? AND id_borrado = ''`,
-      [nroChasis, nroMotor, color, motivoAsignacion, observaciones, id],
+      [
+        sucursalId,
+        nroChasis,
+        nroMotor,
+        color,
+        motivoAsignacion,
+        observaciones,
+        id,
+      ],
     );
 
     return this.findOneByIdOrCodigo(String(id));
@@ -543,6 +571,128 @@ export class IdentificacionesService {
     return this.findOneByIdOrCodigo(String(id));
   }
 
+  /**
+   * Genera un archivo Excel (.xlsx) con todas las unidades que coincidan con los filtros activos.
+   */
+  async exportExcel(filterDto: FilterIdentificacionesDto): Promise<Buffer> {
+    const { search, estado, codart, sucursalId, startDate, endDate } =
+      filterDto;
+    const whereClauses: string[] = ["iu.id_borrado = ''"];
+    const params: SqlParam[] = [];
+
+    if (estado) {
+      whereClauses.push('iu.estado = ?');
+      params.push(estado);
+    }
+
+    if (codart !== undefined) {
+      whereClauses.push('iu.codart_snapshot = ?');
+      params.push(codart);
+    }
+
+    if (sucursalId !== undefined) {
+      whereClauses.push('iu.sucursal_id = ?');
+      params.push(sucursalId);
+    }
+
+    if (startDate && startDate.trim() !== '') {
+      whereClauses.push('iu.fecha_asignacion >= ?');
+      params.push(`${startDate.trim()} 00:00:00`);
+    }
+
+    if (endDate && endDate.trim() !== '') {
+      whereClauses.push('iu.fecha_asignacion <= ?');
+      params.push(`${endDate.trim()} 23:59:59`);
+    }
+
+    if (search && search.trim() !== '') {
+      const term = `%${search.trim()}%`;
+      whereClauses.push(`(
+        iu.codigo_identificador LIKE ?
+        OR CAST(iu.codart_snapshot AS CHAR) LIKE ?
+        OR a.jlv_desc LIKE ?
+        OR iu.nro_chasis_original LIKE ?
+        OR iu.nro_motor_original LIKE ?
+      )`);
+      params.push(term, term, term, term, term);
+    }
+
+    const rows = await this.databaseService.query<IdentificacionJoinedRow[]>(
+      `${this.getBaseSelectSql()}
+       WHERE ${whereClauses.join(' AND ')}
+       ORDER BY iu.correlativo DESC`,
+      params,
+    );
+
+    const workbook = new ExcelJS.Workbook();
+    workbook.creator = 'Broal E-Bikes - Sistema de Identificación';
+    workbook.created = new Date();
+
+    const sheet = workbook.addWorksheet('Auditoría de Unidades');
+
+    sheet.columns = [
+      { header: 'Código', key: 'codigo', width: 16 },
+      { header: 'Cód. Art.', key: 'codart', width: 12 },
+      { header: 'Descripción del Artículo', key: 'articulo', width: 36 },
+      { header: 'Sucursal', key: 'sucursal', width: 24 },
+      { header: 'Color', key: 'color', width: 16 },
+      { header: 'Chasis Original', key: 'chasis', width: 24 },
+      { header: 'Motor Original', key: 'motor', width: 24 },
+      { header: 'Estado', key: 'estado', width: 14 },
+      { header: 'Fecha Alta', key: 'fechaAlta', width: 22 },
+      { header: 'Fecha Venta', key: 'fechaVenta', width: 22 },
+      { header: 'Registrado Por', key: 'usuarioAlta', width: 22 },
+      { header: 'Observaciones / Motivo Baja', key: 'observaciones', width: 38 },
+    ];
+
+    const headerRow = sheet.getRow(1);
+    headerRow.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+    headerRow.fill = {
+      type: 'pattern',
+      pattern: 'solid',
+      fgColor: { argb: 'FF1E3A8A' },
+    };
+
+    const dateOptions: Intl.DateTimeFormatOptions = {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false,
+    };
+
+    for (const row of rows) {
+      const item = this.mapRowToResponse(row);
+      sheet.addRow({
+        codigo: item.codigoIdentificador,
+        codart: item.articulo.codartFormateado,
+        articulo: item.articulo.descripcion,
+        sucursal: `${item.sucursal.nombre} (${item.sucursal.ciudad})`,
+        color: item.color ?? '—',
+        chasis: item.nroChasisOriginal ?? '—',
+        motor: item.nroMotorOriginal ?? '—',
+        estado: item.estado,
+        fechaAlta: new Date(item.fechaAsignacion).toLocaleString(
+          'es-AR',
+          dateOptions,
+        ),
+        fechaVenta: item.fechaVenta
+          ? new Date(item.fechaVenta).toLocaleString('es-AR', dateOptions)
+          : '—',
+        usuarioAlta:
+          item.usuarioCreacion.nombre ?? `ID #${item.usuarioCreacion.id}`,
+        observaciones: item.motivoAnulacion
+          ? `[ANULADO: ${item.motivoAnulacion}]`
+          : (item.observaciones ?? '—'),
+      });
+    }
+
+    const arrayBuffer = await workbook.xlsx.writeBuffer();
+    return Buffer.from(arrayBuffer);
+  }
+
   private getBaseSelectSql(): string {
     return `
       SELECT
@@ -550,6 +700,7 @@ export class IdentificacionesService {
         iu.codigo_identificador,
         iu.correlativo,
         iu.articulo_id,
+        iu.sucursal_id,
         iu.codart_snapshot,
         iu.nro_chasis_original,
         iu.nro_motor_original,
@@ -586,6 +737,7 @@ export class IdentificacionesService {
     row: IdentificacionJoinedRow,
   ): IdentificacionResponse {
     const codartFormateado = String(row.codart_snapshot).padStart(4, '0');
+    const sucursal = getSucursalById(row.sucursal_id);
     return {
       id: row.id,
       codigoIdentificador: row.codigo_identificador,
@@ -598,6 +750,7 @@ export class IdentificacionesService {
         modelo: row.articulo_modelo ? row.articulo_modelo.trim() : null,
         rubro: row.articulo_rubro,
       },
+      sucursal,
       nroChasisOriginal: row.nro_chasis_original,
       nroMotorOriginal: row.nro_motor_original,
       color: row.color,

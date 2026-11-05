@@ -8,7 +8,11 @@ import {
   IsString,
   MaxLength,
 } from 'class-validator';
-import type { MotivoAsignacion } from '../../common/types/index.js';
+import {
+  SUCURSALES_IDS,
+  type MotivoAsignacion,
+  type SucursalId,
+} from '../../common/index.js';
 
 const MOTIVOS_VALIDOS: MotivoAsignacion[] = [
   'ESTANDAR',
@@ -23,6 +27,14 @@ export class CreateIdentificacionDto {
   @IsPositive({ message: 'articuloId debe ser un ID válido' })
   @IsNotEmpty({ message: 'El artículo es obligatorio' })
   articuloId!: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt({ message: 'sucursalId debe ser un número entero' })
+  @IsIn(SUCURSALES_IDS, {
+    message: 'sucursalId debe ser una sucursal válida (1, 2, 3 o 9)',
+  })
+  sucursalId?: SucursalId = 1;
 
   @IsOptional()
   @IsString()
