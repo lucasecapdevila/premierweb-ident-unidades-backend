@@ -4,7 +4,10 @@ import type { Sucursal } from './sucursales.js';
 export type EstadoIdentificacion = 'ACTIVO' | 'ANULADO' | 'VENDIDA';
 
 export type MotivoAsignacion =
-  'ESTANDAR' | 'SIN_NUMERO_ORIGINAL' | 'ILEGIBLE' | 'INACCESIBLE';
+  | 'ESTANDAR'
+  | 'SIN_NUMERO_ORIGINAL'
+  | 'ILEGIBLE'
+  | 'INACCESIBLE';
 
 export interface SecuenciaRow extends RowDataPacket {
   id: number;
@@ -13,7 +16,7 @@ export interface SecuenciaRow extends RowDataPacket {
   estado: number;
 }
 
-export interface IdentificacionJoinedRow extends RowDataPacket {
+export interface IdentificacionBaseRow extends RowDataPacket {
   id: number;
   codigo_identificador: string;
   correlativo: number;
@@ -33,11 +36,19 @@ export interface IdentificacionJoinedRow extends RowDataPacket {
   fecha_actualizacion: Date | string;
   fecha_venta: Date | string | null;
   fecha_anulacion: Date | string | null;
+}
+
+export interface IdentificacionJoinedRow extends IdentificacionBaseRow {
   articulo_desc: string | null;
   articulo_modelo: string | null;
   articulo_rubro: number | null;
   usuario_creacion_nombre: string | null;
   usuario_anulacion_nombre: string | null;
+}
+
+export interface UsuarioLookupRow extends RowDataPacket {
+  id: number;
+  jlv_nombres: string | null;
 }
 
 export interface IdentificacionResponse {
@@ -80,7 +91,7 @@ export interface PaginatedIdentificacionesResponse {
     total: number;
     page: number;
     limit: number;
-    totalPages: number;
+  totalPages: number;
   };
 }
 

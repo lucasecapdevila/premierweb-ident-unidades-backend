@@ -14,14 +14,13 @@ export class AuthService {
   async login(dto: LoginDto) {
     const usuarioInput = dto.usuario.trim();
 
-    const rows = await this.databaseService.query<JlvUsuarioRow[]>(
-      `SELECT id, jlv_usuario, jlv_contrasena, jlv_nombres, jlv_grupo, jlv_esgrupo
+    const rows = await this.databaseService.queryRead<JlvUsuarioRow[]>(
+      `SELECT id, jlv_usuario, jlv_contrasena, jlv_nombres
        FROM jlv_usuarios
-       WHERE jlv_usuario = ?
+       WHERE LOWER(TRIM(jlv_usuario)) = LOWER(TRIM(?))
          AND (id_borrado IS NULL OR id_borrado = '')
-         AND (jlv_esgrupo IS NULL OR jlv_esgrupo = 0)
        LIMIT 1`,
-      [usuarioInput],
+      [dto.usuario],
     );
 
     const user = rows[0];

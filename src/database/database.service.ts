@@ -1,100 +1,70 @@
-import {
-  Injectable,
-  Logger,
-  OnModuleDestroy,
-  OnModuleInit,
-} from '@nestjs/common';
+import { Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import mysql, {
-  Pool,
-  PoolConnection,
-  ResultSetHeader,
-  RowDataPacket,
-} from 'mysql2/promise';
-import type { SqlParam } from '../common/types/index.js';
+import mysql, { Pool, PoolConnection, ResultSetHeader, RowDataPacket } from 'mysql2/promise';
+import { SqlParam } from '../common/types/index.js';
 
 @Injectable()
 export class DatabaseService implements OnModuleInit, OnModuleDestroy {
-  private readonly logger = new Logger(DatabaseService.name);
-  private pool!: Pool;
+  private readPool!: Pool;
+  private writePool!: Pool;
 
-  constructor(private readonly configService: ConfigService) {
-    this.pool = mysql.createPool({
-      host: this.configService.get<string>('DB_HOST', '127.0.0.1'),
-      port: Number(this.configService.get<number>('DB_PORT', 3306)),
-      user: this.configService.get<string>('DB_USER', 'root'),
-      password: this.configService.get<string>('DB_PASSWORD', ''),
-      database: this.configService.get<string>('DB_NAME', 'dev_premier'),
+  constructor(private readonly configService: ConfigService) {}
+
+  private createPool(prefix: 'DB' | 'DB_WRITE'): Pool {
+    return mysql.createPool({
+      host: this.configService.getOrThrow<string>(`${prefix}_HOST`),
+      port: Number(this.configService.getOrThrow<string>(`${prefix}_PORT`)),
+      user: this.configService.getOrThrow<string>(`${prefix}_USER`),
+      password: this.configService.getOrThrow<string>(`${prefix}_PASSWORD`),
+      database: this.configService.getOrThrow<string>(`${prefix}_NAME`),
       waitForConnections: true,
-      connectionLimit: 10,
+      connectionLimit: 15,
       queueLimit: 0,
-      timezone: 'local',
+      enableKeepAlive: true,
+      keepAliveInitialDelay: 10000,
     });
   }
 
-  async onModuleInit(): Promise<void> {
-    try {
-      const connection = await this.pool.getConnection();
-      await connection.ping();
-      connection.release();
-      this.logger.log(
-        `Conexión establecida exitosamente con la base de datos MySQL (${this.configService.get<string>('DB_NAME')})`,
-      );
-    } catch (error) {
-      this.logger.error(
-        'Error al conectar con la base de datos MySQL. Verifique las credenciales en el archivo .env',
-        error,
-      );
-      throw error;
-    }
+  onModuleInit() {
+    this.readPool = this.createPool('DB');        // Base A (lectura)
+    this.writePool = this.createPool('DB_WRITE'); // Base B (escritura)
   }
 
-  async onModuleDestroy(): Promise<void> {
-    if (this.pool) {
-      await this.pool.end();
-      this.logger.log('Pool de conexiones MySQL cerrado correctamente.');
-    }
+  async onModuleDestroy() {
+    await Promise.all([this.readPool.end(), this.writePool.end()]);
   }
 
-  /**
-   * Ejecuta una consulta SELECT y devuelve las filas tipadas
-   */
-  async query<T extends RowDataPacket[]>(
-    sql: string,
-    params: SqlParam[] = [],
-  ): Promise<T> {
-    const [rows] = await this.pool.execute<T>(sql, params);
+  // --- Operaciones de Lectura (Base A) ---
+  async queryRead<T extends RowDataPacket[]>(sql: string, params: SqlParam[] = []): Promise<T> {
+    const [rows] = await this.readPool.query<T>(sql, params);
     return rows;
   }
 
-  /**
-   * Ejecuta un INSERT, UPDATE o DELETE fuera de una transacción compleja
-   */
-  async execute(
-    sql: string,
-    params: SqlParam[] = [],
-  ): Promise<ResultSetHeader> {
-    const [result] = await this.pool.execute<ResultSetHeader>(sql, params);
+  // --- Operaciones de Escritura / Mutación (Base B) ---
+  async queryWrite<T extends RowDataPacket[]>(sql: string, params: SqlParam[] = []): Promise<T> {
+    const [rows] = await this.writePool.query<T>(sql, params);
+    return rows;
+  }
+
+  async executeWrite(sql: string, params: SqlParam[] = []): Promise<ResultSetHeader> {
+    const [result] = await this.writePool.execute<ResultSetHeader>(sql, params);
     return result;
   }
 
-  /**
-   * Ejecuta un bloque de operaciones dentro de una transacción ACID segura.
-   * Si ocurre cualquier excepción, ejecuta ROLLBACK automáticamente.
-   */
-  async withTransaction<T>(
-    work: (connection: PoolConnection) => Promise<T>,
+  // Transacciones seguras sobre la Base B
+  async withWriteTransaction<T>(
+    callback: (connection: PoolConnection) => Promise<T>,
   ): Promise<T> {
-    const connection = await this.pool.getConnection();
+    const connection = await this.writePool.getConnection();
     try {
       await connection.beginTransaction();
-      const result = await work(connection);
+      const result = await callback(connection);
       await connection.commit();
       return result;
     } catch (error) {
       await connection.rollback();
       throw error;
-    } finally {
+    } finally { 
       connection.release();
     }
   }
