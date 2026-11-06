@@ -872,13 +872,7 @@ export class IdentificacionesService {
           OR iu.nro_motor_original LIKE ?
           OR iu.articulo_id IN (${idsPlaceholders})
         )`);
-        params.push(
-          term,
-          term,
-          term,
-          term,
-          ...matchingArts.map((a) => a.id),
-        );
+        params.push(term, term, term, term, ...matchingArts.map((a) => a.id));
       } else {
         whereClauses.push(`(
           iu.codigo_identificador LIKE ?

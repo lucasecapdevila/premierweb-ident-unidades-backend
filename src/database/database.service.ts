@@ -1,6 +1,11 @@
 import { Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import mysql, { Pool, PoolConnection, ResultSetHeader, RowDataPacket } from 'mysql2/promise';
+import mysql, {
+  Pool,
+  PoolConnection,
+  ResultSetHeader,
+  RowDataPacket,
+} from 'mysql2/promise';
 import { SqlParam } from '../common/types/index.js';
 
 @Injectable()
@@ -26,7 +31,7 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
   }
 
   onModuleInit() {
-    this.readPool = this.createPool('DB');        // Base A (lectura)
+    this.readPool = this.createPool('DB'); // Base A (lectura)
     this.writePool = this.createPool('DB_WRITE'); // Base B (escritura)
   }
 
@@ -35,18 +40,27 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
   }
 
   // --- Operaciones de Lectura (Base A) ---
-  async queryRead<T extends RowDataPacket[]>(sql: string, params: SqlParam[] = []): Promise<T> {
+  async queryRead<T extends RowDataPacket[]>(
+    sql: string,
+    params: SqlParam[] = [],
+  ): Promise<T> {
     const [rows] = await this.readPool.query<T>(sql, params);
     return rows;
   }
 
   // --- Operaciones de Escritura / Mutación (Base B) ---
-  async queryWrite<T extends RowDataPacket[]>(sql: string, params: SqlParam[] = []): Promise<T> {
+  async queryWrite<T extends RowDataPacket[]>(
+    sql: string,
+    params: SqlParam[] = [],
+  ): Promise<T> {
     const [rows] = await this.writePool.query<T>(sql, params);
     return rows;
   }
 
-  async executeWrite(sql: string, params: SqlParam[] = []): Promise<ResultSetHeader> {
+  async executeWrite(
+    sql: string,
+    params: SqlParam[] = [],
+  ): Promise<ResultSetHeader> {
     const [result] = await this.writePool.execute<ResultSetHeader>(sql, params);
     return result;
   }
@@ -64,7 +78,7 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
     } catch (error) {
       await connection.rollback();
       throw error;
-    } finally { 
+    } finally {
       connection.release();
     }
   }

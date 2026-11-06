@@ -4,10 +4,7 @@ import type { Sucursal } from './sucursales.js';
 export type EstadoIdentificacion = 'ACTIVO' | 'ANULADO' | 'VENDIDA';
 
 export type MotivoAsignacion =
-  | 'ESTANDAR'
-  | 'SIN_NUMERO_ORIGINAL'
-  | 'ILEGIBLE'
-  | 'INACCESIBLE';
+  'ESTANDAR' | 'SIN_NUMERO_ORIGINAL' | 'ILEGIBLE' | 'INACCESIBLE';
 
 export interface SecuenciaRow extends RowDataPacket {
   id: number;
@@ -91,7 +88,7 @@ export interface PaginatedIdentificacionesResponse {
     total: number;
     page: number;
     limit: number;
-  totalPages: number;
+    totalPages: number;
   };
 }
 
